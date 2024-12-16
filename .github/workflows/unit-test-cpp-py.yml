@@ -79,9 +79,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          ./mvnw${{ steps.platform_suffix.outputs.platform_suffix }} -P with-cpp,with-python clean verify && \
-          (echo "Build failed. Running objdump for analysis..." && \
-          objdump -p D:/a/tsfile/tsfile/cpp/target/build/lib/TsFile_Test.exe)
+          ./mvnw${{ steps.platform_suffix.outputs.platform_suffix }} -P with-cpp
 
       - name: Upload whl Artifact
         uses: actions/upload-artifact@v4
@@ -90,7 +88,9 @@ jobs:
           path: python/dist/tsfile-*.whl
           retention-days: 1
 
-      - name: Print name on failure
-        if: failure()
-        run: |
-          objdump -p D:/a/tsfile/tsfile/cpp/target/build/lib/TsFile_Test.exe
+      - name: Upload target directory on failure
+        if: failure()  # 仅在构建失败时执行
+        uses: actions/upload-artifact@v3
+        with:
+          name: failed-build-target
+          path: D:/a/tsfile/tsfile/cpp/target/
