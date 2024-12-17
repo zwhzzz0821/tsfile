@@ -57,16 +57,27 @@ TEST_F(WriteFileTest, WriteToFile) {
 
     const char *content = "Hello, World!";
     uint32_t content_len = strlen(content);
+    std::cout << "write start" << std::endl;
     EXPECT_EQ(write_file.write(content, content_len), E_OK);
+    std::cout << "write end" << std::endl;
 
+    std::cout << "close start" << std::endl;
     write_file.close();
+    std::cout << "close end" << std::endl;
 
+    std::cout << "read start" << std::endl;
     std::ifstream file(file_name);
+    std::cout << "read end" << std::endl;
+
+    std::cout << "for line" << std::endl;
     std::string file_content((std::istreambuf_iterator<char>(file)),
                              std::istreambuf_iterator<char>());
+    std::cout << "for line end" << std::endl;
     EXPECT_EQ(file_content, content);
 
+    std::cout << "remove begin" << std::endl;
     remove(file_name.c_str());
+    std::cout << "remove end" << std::endl;
 }
 
 TEST_F(WriteFileTest, SyncFile) {
