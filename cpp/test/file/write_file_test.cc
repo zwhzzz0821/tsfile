@@ -59,9 +59,11 @@ TEST_F(WriteFileTest, WriteToFile) {
     uint32_t content_len = strlen(content);
     EXPECT_EQ(write_file.write(content, content_len), E_OK);
 
+    volatile bool file_sync = false;
     write_file.sync();
+    file_sync = true;
     write_file.close();
-    
+
     std::ifstream file(file_name);
 
     std::string file_content((std::istreambuf_iterator<char>(file)),
