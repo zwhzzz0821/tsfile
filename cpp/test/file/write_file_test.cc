@@ -62,7 +62,7 @@ TEST_F(WriteFileTest, WriteToFile) {
     std::cout << "write end" << std::endl;
 
     std::cout << "close start" << std::endl;
-    write_file.close();
+    EXPECT_EQ(write_file.close(), E_OK);
     std::cout << "close end" << std::endl;
 
     std::cout << "read start" << std::endl;
