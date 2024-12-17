@@ -58,8 +58,10 @@ TEST_F(WriteFileTest, WriteToFile) {
     const char *content = "Hello, World!";
     uint32_t content_len = strlen(content);
     EXPECT_EQ(write_file.write(content, content_len), E_OK);
-    write_file.sync();
 
+    write_file.sync();
+    write_file.close();
+    
     std::ifstream file(file_name);
 
     std::string file_content((std::istreambuf_iterator<char>(file)),
