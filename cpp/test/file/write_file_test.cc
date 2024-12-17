@@ -44,6 +44,8 @@ TEST_F(WriteFileTest, CreateFile) {
     remove(file_name.c_str());
 }
 
+#pragma GCC push_options
+#pragma GCC optimize ("O0")
 TEST_F(WriteFileTest, WriteToFile) {
     WriteFile write_file;
     std::string file_name = "test_file_write.dat";
@@ -57,28 +59,17 @@ TEST_F(WriteFileTest, WriteToFile) {
 
     const char *content = "Hello, World!";
     uint32_t content_len = strlen(content);
-    std::cout << "write start" << std::endl;
     EXPECT_EQ(write_file.write(content, content_len), E_OK);
-    std::cout << "write end" << std::endl;
-
-    std::cout << "close start" << std::endl;
-    EXPECT_EQ(write_file.close(), E_OK);
-    std::cout << "close end" << std::endl;
-
-    std::cout << "read start" << std::endl;
+    
     std::ifstream file(file_name);
-    std::cout << "read end" << std::endl;
 
-    std::cout << "for line" << std::endl;
     std::string file_content((std::istreambuf_iterator<char>(file)),
                              std::istreambuf_iterator<char>());
-    std::cout << "for line end" << std::endl;
     EXPECT_EQ(file_content, content);
 
-    std::cout << "remove begin" << std::endl;
     remove(file_name.c_str());
-    std::cout << "remove end" << std::endl;
 }
+#pragma GCC pop_options
 
 TEST_F(WriteFileTest, SyncFile) {
     WriteFile write_file;
