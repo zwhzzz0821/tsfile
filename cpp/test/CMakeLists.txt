@@ -95,6 +95,10 @@ target_link_libraries(
 )
 set_target_properties(TsFile_Test PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${LIBTSFILE_SDK_DIR})
 
+add_custom_command(TARGET TsFile_Test POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:TsFile_Test> ${CMAKE_BINARY_DIR}/backup/TsFile_Test.exe
+    COMMENT "Copying TsFile_Test.exe to backup directory"
+)
 
 include(GoogleTest)
 gtest_discover_tests(TsFile_Test)

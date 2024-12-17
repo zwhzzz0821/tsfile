@@ -19,6 +19,7 @@ under the License.
 cmake_minimum_required(VERSION 3.11)
 project(TsFile_CPP)
 
+set_property(GLOBAL PROPERTY CMAKE_POLICY_DEFAULT_CMP0106 NEW)
 cmake_policy(SET CMP0079 NEW)
 set(TsFile_CPP_VERSION 1.2.0.dev)
 set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} -Wall -Werror")
@@ -85,4 +86,3 @@ add_subdirectory(test)
 if(TESTS_ENABLED)
     add_dependencies(TsFile_Test tsfile)
 endif()
-
