@@ -19,8 +19,8 @@
 package org.apache.tsfile.write.chunk;
 
 import org.apache.tsfile.common.constant.TsFileConstant;
+import org.apache.tsfile.encrypt.EncryptParameter;
 import org.apache.tsfile.encrypt.EncryptUtils;
-import org.apache.tsfile.encrypt.IEncryptor;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.write.WriteProcessException;
 import org.apache.tsfile.file.metadata.IDeviceID;
@@ -28,7 +28,7 @@ import org.apache.tsfile.utils.Binary;
 import org.apache.tsfile.utils.DateUtils;
 import org.apache.tsfile.write.UnSupportedDataTypeException;
 import org.apache.tsfile.write.record.Tablet;
-import org.apache.tsfile.write.record.Tablet.ColumnType;
+import org.apache.tsfile.write.record.Tablet.ColumnCategory;
 import org.apache.tsfile.write.record.datapoint.DataPoint;
 import org.apache.tsfile.write.schema.IMeasurementSchema;
 import org.apache.tsfile.write.writer.TsFileIOWriter;
@@ -53,33 +53,34 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
   /** Map(measurementID, ChunkWriterImpl). Aligned measurementId is empty. */
   private final Map<String, ChunkWriterImpl> chunkWriters = new LinkedHashMap<>();
 
-  private IEncryptor encryptor;
+  private EncryptParameter encryptParam;
 
   // measurementId -> lastTime
   private Map<String, Long> lastTimeMap = new HashMap<>();
 
   public NonAlignedChunkGroupWriterImpl(IDeviceID deviceId) {
     this.deviceId = deviceId;
-    this.encryptor = EncryptUtils.encryptor;
+    this.encryptParam = EncryptUtils.encryptParam;
   }
 
-  public NonAlignedChunkGroupWriterImpl(IDeviceID deviceId, IEncryptor encryptor) {
+  public NonAlignedChunkGroupWriterImpl(IDeviceID deviceId, EncryptParameter encryptParam) {
     this.deviceId = deviceId;
-    this.encryptor = encryptor;
+    this.encryptParam = encryptParam;
   }
 
   @Override
   public void tryToAddSeriesWriter(IMeasurementSchema schema) {
-    if (!chunkWriters.containsKey(schema.getMeasurementId())) {
-      this.chunkWriters.put(schema.getMeasurementId(), new ChunkWriterImpl(schema, encryptor));
+    if (!chunkWriters.containsKey(schema.getMeasurementName())) {
+      this.chunkWriters.put(schema.getMeasurementName(), new ChunkWriterImpl(schema, encryptParam));
     }
   }
 
   @Override
   public void tryToAddSeriesWriter(List<IMeasurementSchema> schemas) {
     for (IMeasurementSchema schema : schemas) {
-      if (!chunkWriters.containsKey(schema.getMeasurementId())) {
-        this.chunkWriters.put(schema.getMeasurementId(), new ChunkWriterImpl(schema, encryptor));
+      if (!chunkWriters.containsKey(schema.getMeasurementName())) {
+        this.chunkWriters.put(
+            schema.getMeasurementName(), new ChunkWriterImpl(schema, encryptParam));
       }
     }
   }
@@ -102,7 +103,7 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
 
   @Override
   public int write(Tablet tablet) throws IOException, WriteProcessException {
-    return write(tablet, 0, tablet.rowSize);
+    return write(tablet, 0, tablet.getRowSize());
   }
 
   @Override
@@ -112,10 +113,10 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
     List<IMeasurementSchema> timeseries = tablet.getSchemas();
     for (int column = 0; column < tablet.getSchemas().size(); column++) {
       if (tablet.getColumnTypes() != null
-          && tablet.getColumnTypes().get(column) != ColumnType.MEASUREMENT) {
+          && tablet.getColumnTypes().get(column) != ColumnCategory.MEASUREMENT) {
         continue;
       }
-      String measurementId = timeseries.get(column).getMeasurementId();
+      String measurementId = timeseries.get(column).getMeasurementName();
       TSDataType tsDataType = timeseries.get(column).getType();
       pointCount = 0;
       for (int row = startRowIndex; row < endRowIndex; row++) {
@@ -207,7 +208,8 @@ public class NonAlignedChunkGroupWriterImpl implements IChunkGroupWriter {
   }
 
   private void checkIsHistoryData(String measurementId, long time) throws WriteProcessException {
-    if (time <= lastTimeMap.getOrDefault(measurementId, -1L)) {
+    final Long lastTime = lastTimeMap.get(measurementId);
+    if (lastTime != null && time <= lastTime) {
       throw new WriteProcessException(
           "Not allowed to write out-of-order data in timeseries "
               + deviceId

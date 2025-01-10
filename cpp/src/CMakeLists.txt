@@ -17,7 +17,6 @@ specific language governing permissions and limitations
 under the License.
 ]]
 message("Running in src diectory")
-include(${PROJECT_SOURCE_DIR}/cmake/build_function.cmake)
 if (${COV_ENABLED})
     add_compile_options(-fprofile-arcs -ftest-coverage)
 endif ()
@@ -39,8 +38,8 @@ else()
     target_link_libraries(tsfile common_obj compress_obj cwrapper_obj file_obj read_obj write_obj)
 endif()
 
-set(LIBTSFILE_PROJECT_VERSION 1.0)
-set(LIBTSFILE_SO_VERSION 1.0)
+set(LIBTSFILE_PROJECT_VERSION ${TsFile_CPP_VERSION})
+set(LIBTSFILE_SO_VERSION ${TsFile_CPP_VERSION})
 set_target_properties(tsfile PROPERTIES VERSION ${LIBTSFILE_PROJECT_VERSION})
 set_target_properties(tsfile PROPERTIES SOVERSION ${LIBTSFILE_SO_VERSION})
 
@@ -50,13 +49,12 @@ install(TARGETS tsfile LIBRARY DESTINATION ${LIBTSFILE_SDK_DIR})
 set(SNAPPY_LIB_NAME "snappy")
 set(LZ4_LIB_NAME "LZ4")
 set(LZO_LIB_NAME "lzokay")
+set(ZLIB_LIB_NAME "z")
 
-find_library(my_z_lib NAMES z)
-
-target_link_libraries(compress_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${my_z_lib})
-target_link_libraries(common_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${my_z_lib})
-target_link_libraries(read_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${my_z_lib})
-target_link_libraries(write_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${my_z_lib})
+target_link_libraries(compress_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${ZLIB_LIB_NAME})
+target_link_libraries(common_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${ZLIB_LIB_NAME})
+target_link_libraries(read_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${ZLIB_LIB_NAME})
+target_link_libraries(write_obj ${SNAPPY_LIB_NAME} ${LZ4_LIB_NAME} ${LZO_LIB_NAME} ${ZLIB_LIB_NAME})
 # set(CMAKE_PREFIX_PATH ../../third-party/lz4-dev/lib)
 # set(LZ4_LIB_DIR ../../third-party/lz4-dev/lib)
 # find_library(my_lz4_lib NAMES lz4 PATHS ${LZ4_LIB_DIR} NO_DEFAULT_PATH REQUIRED)

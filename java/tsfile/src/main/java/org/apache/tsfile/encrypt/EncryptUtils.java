@@ -18,24 +18,39 @@
  */
 package org.apache.tsfile.encrypt;
 
+import org.apache.tsfile.common.conf.TSFileConfig;
 import org.apache.tsfile.common.conf.TSFileDescriptor;
 import org.apache.tsfile.exception.encrypt.EncryptException;
-import org.apache.tsfile.file.metadata.enums.EncryptionType;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
 import java.security.MessageDigest;
+import java.util.Arrays;
 
 public class EncryptUtils {
 
+  private static final Logger logger = LoggerFactory.getLogger(EncryptUtils.class);
+
+  private static final String defaultKey = "abcdefghijklmnop";
+
   public static String normalKeyStr = getNormalKeyStr();
 
-  public static IEncryptor encryptor = getDefaultEncryptor();
-
-  public static IDecryptor decryptor = getDefaultDecryptor();
+  public static EncryptParameter encryptParam = getEncryptParameter();
 
   public static String getEncryptKeyFromPath(String path) {
+    if (path == null) {
+      logger.error("encrypt key path is null, use the default key");
+      return defaultKey;
+    }
+    if (path.isEmpty()) {
+      logger.error("encrypt key path is empty, use the default key");
+      return defaultKey;
+    }
     try (BufferedReader br = new BufferedReader(new FileReader(path))) {
       StringBuilder sb = new StringBuilder();
       String line;
@@ -50,7 +65,7 @@ public class EncryptUtils {
       }
       return sb.toString();
     } catch (IOException e) {
-      throw new RuntimeException(e);
+      throw new EncryptException("Read main encrypt key error", e);
     }
   }
 
@@ -80,10 +95,16 @@ public class EncryptUtils {
 
   public static String getNormalKeyStr() {
     try {
-      MessageDigest md = MessageDigest.getInstance("MD5");
+      MessageDigest md = MessageDigest.getInstance("SHA-256");
       md.update("IoTDB is the best".getBytes());
       md.update(TSFileDescriptor.getInstance().getConfig().getEncryptKey().getBytes());
-      byte[] data_key = md.digest();
+      byte[] data_key = Arrays.copyOfRange(md.digest(), 0, 16);
+      data_key =
+          IEncryptor.getEncryptor(
+                  TSFileDescriptor.getInstance().getConfig().getEncryptType(),
+                  TSFileDescriptor.getInstance().getConfig().getEncryptKey().getBytes())
+              .encrypt(data_key);
+
       StringBuilder valueStr = new StringBuilder();
 
       for (byte b : data_key) {
@@ -95,51 +116,118 @@ public class EncryptUtils {
 
       return str;
     } catch (Exception e) {
-      throw new EncryptException("md5 function not found while using md5 to generate data key");
+      throw new EncryptException(
+          "SHA-256 function not found while using SHA-256 to generate data key");
     }
   }
 
-  public static IEncryptor getDefaultEncryptor() {
-    EncryptionType encryptType;
+  public static String getNormalKeyStr(TSFileConfig conf) {
+    try {
+      MessageDigest md = MessageDigest.getInstance("SHA-256");
+      md.update("IoTDB is the best".getBytes());
+      md.update(conf.getEncryptKey().getBytes());
+      byte[] data_key = Arrays.copyOfRange(md.digest(), 0, 16);
+      data_key =
+          IEncryptor.getEncryptor(conf.getEncryptType(), conf.getEncryptKey().getBytes())
+              .encrypt(data_key);
+
+      StringBuilder valueStr = new StringBuilder();
+
+      for (byte b : data_key) {
+        valueStr.append(b).append(",");
+      }
+
+      valueStr.deleteCharAt(valueStr.length() - 1);
+      String str = valueStr.toString();
+
+      return str;
+    } catch (Exception e) {
+      throw new EncryptException(
+          "SHA-256 function not found while using SHA-256 to generate data key", e);
+    }
+  }
+
+  public static EncryptParameter getEncryptParameter() {
+    return getEncryptParameter(TSFileDescriptor.getInstance().getConfig());
+  }
+
+  public static EncryptParameter getEncryptParameter(TSFileConfig conf) {
+    String encryptType;
     byte[] dataEncryptKey;
-    if (TSFileDescriptor.getInstance().getConfig().getEncryptFlag()) {
-      encryptType = TSFileDescriptor.getInstance().getConfig().getEncryptType();
+    if (conf.getEncryptFlag()) {
+      encryptType = conf.getEncryptType();
       try {
-        MessageDigest md = MessageDigest.getInstance("MD5");
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         md.update("IoTDB is the best".getBytes());
-        md.update(TSFileDescriptor.getInstance().getConfig().getEncryptKey().getBytes());
-        dataEncryptKey = md.digest();
-      } catch (Exception e1) {
-        throw new EncryptException("md5 function not found while using md5 to generate data key");
+        md.update(conf.getEncryptKey().getBytes());
+        dataEncryptKey = Arrays.copyOfRange(md.digest(), 0, 16);
+      } catch (Exception e) {
+        throw new EncryptException(
+            "SHA-256 function not found while using SHA-256 to generate data key", e);
       }
     } else {
-      encryptType = EncryptionType.UNENCRYPTED;
+      encryptType = "org.apache.tsfile.encrypt.UNENCRYPTED";
       dataEncryptKey = null;
     }
-    return IEncryptor.getEncryptor(encryptType, dataEncryptKey);
+    return new EncryptParameter(encryptType, dataEncryptKey);
   }
 
-  public static IDecryptor getDefaultDecryptor() {
-    EncryptionType encryptType;
+  public static IEncrypt getEncrypt() {
+    return getEncrypt(TSFileDescriptor.getInstance().getConfig());
+  }
+
+  public static IEncrypt getEncrypt(String encryptType, byte[] dataEncryptKey) {
+    try {
+      if (IEncrypt.encryptMap.containsKey(encryptType)) {
+        return ((IEncrypt) IEncrypt.encryptMap.get(encryptType).newInstance(dataEncryptKey));
+      }
+      Class<?> encryptTypeClass = Class.forName(encryptType);
+      java.lang.reflect.Constructor<?> constructor =
+          encryptTypeClass.getDeclaredConstructor(byte[].class);
+      IEncrypt.encryptMap.put(encryptType, constructor);
+      return ((IEncrypt) constructor.newInstance(dataEncryptKey));
+    } catch (ClassNotFoundException e) {
+      throw new EncryptException("Get encryptor class failed: " + encryptType, e);
+    } catch (NoSuchMethodException e) {
+      throw new EncryptException("Get constructor for encryptor failed: " + encryptType, e);
+    } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
+      throw new EncryptException("New encryptor instance failed: " + encryptType, e);
+    }
+  }
+
+  public static IEncrypt getEncrypt(TSFileConfig conf) {
+    String encryptType;
     byte[] dataEncryptKey;
-    if (TSFileDescriptor.getInstance().getConfig().getEncryptFlag()) {
-      encryptType = TSFileDescriptor.getInstance().getConfig().getEncryptType();
+    if (conf.getEncryptFlag()) {
+      encryptType = conf.getEncryptType();
       try {
-        MessageDigest md = MessageDigest.getInstance("MD5");
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         md.update("IoTDB is the best".getBytes());
-        md.update(TSFileDescriptor.getInstance().getConfig().getEncryptKey().getBytes());
-        dataEncryptKey = md.digest();
-      } catch (Exception e1) {
-        throw new EncryptException("md5 function not found while using md5 to generate data key");
+        md.update(conf.getEncryptKey().getBytes());
+        dataEncryptKey = Arrays.copyOfRange(md.digest(), 0, 16);
+      } catch (Exception e) {
+        throw new EncryptException(
+            "SHA-256 function not found while using SHA-256 to generate data key", e);
       }
     } else {
-      encryptType = EncryptionType.UNENCRYPTED;
+      encryptType = "org.apache.tsfile.encrypt.UNENCRYPTED";
       dataEncryptKey = null;
     }
-    return IDecryptor.getDecryptor(encryptType, dataEncryptKey);
+    try {
+      Class<?> encryptTypeClass = Class.forName(encryptType);
+      java.lang.reflect.Constructor<?> constructor =
+          encryptTypeClass.getDeclaredConstructor(byte[].class);
+      return ((IEncrypt) constructor.newInstance(dataEncryptKey));
+    } catch (ClassNotFoundException e) {
+      throw new EncryptException("Get encryptor class failed: " + encryptType, e);
+    } catch (NoSuchMethodException e) {
+      throw new EncryptException("Get constructor for encryptor failed: " + encryptType, e);
+    } catch (InvocationTargetException | InstantiationException | IllegalAccessException e) {
+      throw new EncryptException("New encryptor instance failed: " + encryptType, e);
+    }
   }
 
-  public static byte[] getKeyFromStr(String str) {
+  public static byte[] getSecondKeyFromStr(String str) {
     String[] strArray = str.split(",");
     byte[] key = new byte[strArray.length];
     for (int i = 0; i < strArray.length; i++) {

@@ -66,7 +66,7 @@ public class AES128TsFileReadWriteTest {
   @Before
   public void setUp() {
     conf.setEncryptFlag("true");
-    conf.setEncryptType("AES128");
+    conf.setEncryptType("org.apache.tsfile.encrypt.AES128");
     conf.setEncryptKey("thisisourtestkey");
     f = new File(path);
     if (f.exists()) {
@@ -80,7 +80,7 @@ public class AES128TsFileReadWriteTest {
   @After
   public void tearDown() {
     conf.setEncryptKey("abcdefghijklmnop");
-    conf.setEncryptType("UNENCRYPTED");
+    conf.setEncryptType("org.apache.tsfile.encrypt.UNENCRYPTED");
     conf.setEncryptFlag("false");
     f = new File(path);
     if (f.exists()) {
@@ -180,11 +180,11 @@ public class AES128TsFileReadWriteTest {
           new Path(deviceID),
           new MeasurementSchema("sensor_2", TSDataType.INT32, TSEncoding.TS_2DIFF));
       // construct TSRecord
-      TSRecord tsRecord = new TSRecord(1, deviceID);
+      TSRecord tsRecord = new TSRecord(deviceID, 1);
       DataPoint dPoint1 = new FloatDataPoint("sensor_1", 1.2f);
       tsRecord.addTuple(dPoint1);
       // write a TSRecord to TsFile
-      tsFileWriter.write(tsRecord);
+      tsFileWriter.writeRecord(tsRecord);
     }
 
     // read example : no filter
@@ -223,11 +223,11 @@ public class AES128TsFileReadWriteTest {
           new Path(deviceID), new MeasurementSchema("sensor_1", dataType, encodingType));
       for (long i = 1; i < floatCount; i++) {
         // construct TSRecord
-        TSRecord tsRecord = new TSRecord(i, deviceID);
+        TSRecord tsRecord = new TSRecord(deviceID, i);
         DataPoint dPoint1 = proxy.generateOne(i);
         tsRecord.addTuple(dPoint1);
         // write a TSRecord to TsFile
-        tsFileWriter.write(tsRecord);
+        tsFileWriter.writeRecord(tsRecord);
       }
     }
   }

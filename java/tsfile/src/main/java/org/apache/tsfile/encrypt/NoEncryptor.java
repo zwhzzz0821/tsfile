@@ -4,7 +4,7 @@
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * License); you may not use this file except in compliance
+ * "License"); you may not use this file except in compliance
  * with the License.  You may obtain a copy of the License at
  *
  *     http://www.apache.org/licenses/LICENSE-2.0
@@ -16,4 +16,28 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-/* #undef ENABLE_TEST */
+package org.apache.tsfile.encrypt;
+
+import org.apache.tsfile.file.metadata.enums.EncryptionType;
+
+import java.util.Arrays;
+
+public class NoEncryptor implements IEncryptor {
+
+  NoEncryptor(byte[] key) {}
+
+  @Override
+  public byte[] encrypt(byte[] data) {
+    return data;
+  }
+
+  @Override
+  public byte[] encrypt(byte[] data, int offset, int size) {
+    return Arrays.copyOfRange(data, offset, offset + size);
+  }
+
+  @Override
+  public EncryptionType getEncryptionType() {
+    return EncryptionType.UNENCRYPTED;
+  }
+}

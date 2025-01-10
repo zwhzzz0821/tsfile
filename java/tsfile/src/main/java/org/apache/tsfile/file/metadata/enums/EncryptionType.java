@@ -20,7 +20,7 @@
 package org.apache.tsfile.file.metadata.enums;
 
 public enum EncryptionType {
-  /** Do not comprocess. */
+  /** UNENCRYPTED. */
   UNENCRYPTED("UNENCRYPTED", (byte) 0),
 
   /** SM4128. */
@@ -73,7 +73,7 @@ public enum EncryptionType {
   /**
    * get extension.
    *
-   * @return extension (string type), for example: SM4128、AES128
+   * @return extension (string type), for example: UNENCRYPTED、AES128
    */
   public String getExtension() {
     return extensionName;

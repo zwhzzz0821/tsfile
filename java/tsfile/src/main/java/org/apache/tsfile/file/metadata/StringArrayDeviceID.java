@@ -76,8 +76,8 @@ public class StringArrayDeviceID implements IDeviceID {
   // or we can just use a tuple like Relational DB.
   private final String[] segments;
 
-  public StringArrayDeviceID(String... segments) {
-    this.segments = formalize(segments);
+  public StringArrayDeviceID(String... deviceIdSegments) {
+    this.segments = formalize(deviceIdSegments);
   }
 
   public StringArrayDeviceID(String deviceIdString) {
@@ -229,6 +229,10 @@ public class StringArrayDeviceID implements IDeviceID {
 
   @Override
   public String segment(int i) {
+    if (i >= segments.length) {
+      // after removing trailing nulls, the provided index may be larger than the number of segments
+      return null;
+    }
     return segments[i];
   }
 
