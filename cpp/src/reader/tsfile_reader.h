@@ -21,13 +21,14 @@
 #define READER_TSFILE_READER_H
 
 #include "common/row_record.h"
+#include "common/tsfile_common.h"
 #include "expression.h"
 #include "file/read_file.h"
-
 namespace storage {
 class TsFileExecutor;
 class ReadFile;
-class QueryDataSet;
+class ResultSet;
+struct MeasurementSchema;
 }  // namespace storage
 
 namespace storage {
@@ -40,12 +41,21 @@ class TsFileReader {
     TsFileReader();
     ~TsFileReader();
     int open(const std::string &file_path);
-    int query(storage::QueryExpression *qe, QueryDataSet *&ret_qds);
-    void destroy_query_data_set(QueryDataSet *qds);
-    QueryDataSet *read_timeseries(const std::string &device_name,
-                                  std::vector<std::string> measurement_name);
+    int close();
+    int query(storage::QueryExpression *qe, ResultSet *&ret_qds);
+    int query(std::vector<std::string> &path_list, int64_t start_time,
+              int64_t end_time, ResultSet *&result_set);
+    void destroy_query_data_set(ResultSet *qds);
+    ResultSet *read_timeseries(const std::shared_ptr<IDeviceID>& device_id,
+                               const std::vector<std::string>& measurement_name);
+    std::vector<std::shared_ptr<IDeviceID>> get_all_devices(std::string table_name);
+    int get_timeseries_schema(std::shared_ptr<IDeviceID> device_id,
+                              std::vector<MeasurementSchema> &result);
+
 
    private:
+    int get_all_devices(std::vector<std::shared_ptr<IDeviceID>> &device_ids,
+                        std::shared_ptr<MetaIndexNode> index_node, common::PageArena &pa);
     storage::ReadFile *read_file_;
     storage::TsFileExecutor *tsfile_executor_;
 };

@@ -20,7 +20,6 @@
 package org.apache.tsfile.tableview;
 
 import org.apache.tsfile.enums.TSDataType;
-import org.apache.tsfile.exception.read.ReadProcessException;
 import org.apache.tsfile.exception.write.WriteProcessException;
 import org.apache.tsfile.file.metadata.IDeviceID;
 import org.apache.tsfile.file.metadata.IDeviceID.Factory;
@@ -109,39 +108,6 @@ public class TableViewTest {
     testWrite(testTableSchema);
   }
 
-  public static void main(String[] args) throws IOException, ReadProcessException {
-    File testFile =
-        new File(
-            "C:\\Users\\JT\\Downloads\\sequence-root.test_g_0-1-2714-1729258251084-4-0-0.tsfile");
-    TsFileSequenceReader sequenceReader = new TsFileSequenceReader(testFile.getAbsolutePath());
-    TableQueryExecutor tableQueryExecutor =
-        new TableQueryExecutor(
-            new MetadataQuerierByFileImpl(sequenceReader),
-            new CachedChunkLoaderImpl(sequenceReader),
-            TableQueryOrdering.DEVICE);
-
-    final TsBlockReader reader =
-        tableQueryExecutor.query("table_5", Arrays.asList("s_0"), null, null, null);
-    assertTrue(reader.hasNext());
-    int cnt = 0;
-    while (reader.hasNext()) {
-      final TsBlock result = reader.next();
-      for (int i = 0; i < result.getPositionCount(); i++) {
-        String col = result.getColumn(0).getObject(i).toString();
-        StringBuilder builder = new StringBuilder(col);
-        for (int j = 1; j < result.getValueColumns().length; j++) {
-          if (result.getColumn(j).isNull(i)) {
-            builder.append(",").append(result.getColumn(j).getObject(i).toString());
-          } else {
-            builder.append(",").append("null");
-          }
-        }
-        System.out.println(result.getTimeByIndex(i) + "\t" + builder.toString());
-      }
-      cnt += result.getPositionCount();
-    }
-  }
-
   public static void writeTsFile(TableSchema tableSchema, File file)
       throws IOException, WriteProcessException {
     try (TsFileWriter writer = new TsFileWriter(file)) {
@@ -202,10 +168,10 @@ public class TableViewTest {
                   new MeasurementSchema("id3", TSDataType.STRING),
                   new MeasurementSchema("s1", TSDataType.INT32)),
               Arrays.asList(
-                  ColumnCategory.ID,
-                  ColumnCategory.ID,
-                  ColumnCategory.ID,
-                  ColumnCategory.MEASUREMENT));
+                  ColumnCategory.TAG,
+                  ColumnCategory.TAG,
+                  ColumnCategory.TAG,
+                  ColumnCategory.FIELD));
       writer.registerTableSchema(tableSchema);
       Tablet tablet =
           new Tablet(
@@ -530,13 +496,13 @@ public class TableViewTest {
       measurementSchemas.add(
           new MeasurementSchema(
               "id" + i, TSDataType.TEXT, TSEncoding.PLAIN, CompressionType.UNCOMPRESSED));
-      columnCategories.add(ColumnCategory.ID);
+      columnCategories.add(ColumnCategory.TAG);
     }
     for (int i = 0; i < measurementSchemaNum; i++) {
       measurementSchemas.add(
           new MeasurementSchema(
               "s" + i, TSDataType.INT64, TSEncoding.PLAIN, CompressionType.UNCOMPRESSED));
-      columnCategories.add(ColumnCategory.MEASUREMENT);
+      columnCategories.add(ColumnCategory.FIELD);
     }
     return new TableSchema("testTable" + tableNum, measurementSchemas, columnCategories);
   }
@@ -553,7 +519,7 @@ public class TableViewTest {
         measurementSchemas.add(
             new MeasurementSchema(
                 "id" + idIndex, TSDataType.TEXT, TSEncoding.PLAIN, CompressionType.UNCOMPRESSED));
-        columnCategories.add(ColumnCategory.ID);
+        columnCategories.add(ColumnCategory.TAG);
         idIndex++;
       }
 
@@ -564,7 +530,7 @@ public class TableViewTest {
                 TSDataType.INT64,
                 TSEncoding.PLAIN,
                 CompressionType.UNCOMPRESSED));
-        columnCategories.add(ColumnCategory.MEASUREMENT);
+        columnCategories.add(ColumnCategory.FIELD);
         measurementIndex++;
       }
     }

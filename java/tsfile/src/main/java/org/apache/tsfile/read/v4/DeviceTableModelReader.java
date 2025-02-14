@@ -19,13 +19,12 @@
 
 package org.apache.tsfile.read.v4;
 
-import org.apache.tsfile.common.TsFileApi;
+import org.apache.tsfile.annotations.TsFileApi;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.read.ReadProcessException;
 import org.apache.tsfile.exception.write.NoMeasurementException;
 import org.apache.tsfile.exception.write.NoTableException;
 import org.apache.tsfile.file.metadata.TableSchema;
-import org.apache.tsfile.file.metadata.TsFileMetadata;
 import org.apache.tsfile.read.TsFileSequenceReader;
 import org.apache.tsfile.read.controller.CachedChunkLoaderImpl;
 import org.apache.tsfile.read.controller.IChunkLoader;
@@ -57,6 +56,7 @@ public class DeviceTableModelReader implements ITsFileReader {
 
   public DeviceTableModelReader(File file) throws IOException {
     this.fileReader = new TsFileSequenceReader(file.getPath());
+    this.fileReader.setEnableCacheTableSchemaMap();
     this.metadataQuerier = new MetadataQuerierByFileImpl(fileReader);
     this.chunkLoader = new CachedChunkLoaderImpl(fileReader);
     this.queryExecutor =
@@ -66,38 +66,39 @@ public class DeviceTableModelReader implements ITsFileReader {
 
   @TsFileApi
   public List<TableSchema> getAllTableSchema() throws IOException {
-    Map<String, TableSchema> tableSchemaMap = fileReader.readFileMetadata().getTableSchemaMap();
+    Map<String, TableSchema> tableSchemaMap = fileReader.getTableSchemaMap();
     return new ArrayList<>(tableSchemaMap.values());
   }
 
   @TsFileApi
   public Optional<TableSchema> getTableSchemas(String tableName) throws IOException {
-    TsFileMetadata tsFileMetadata = fileReader.readFileMetadata();
-    Map<String, TableSchema> tableSchemaMap = tsFileMetadata.getTableSchemaMap();
-    return Optional.ofNullable(tableSchemaMap.get(tableName));
+    Map<String, TableSchema> tableSchemaMap = fileReader.getTableSchemaMap();
+    return Optional.ofNullable(tableSchemaMap.get(tableName.toLowerCase()));
   }
 
   @TsFileApi
   public ResultSet query(String tableName, List<String> columnNames, long startTime, long endTime)
       throws IOException, NoTableException, NoMeasurementException, ReadProcessException {
-    TsFileMetadata tsFileMetadata = fileReader.readFileMetadata();
-    TableSchema tableSchema = tsFileMetadata.getTableSchemaMap().get(tableName);
+    String lowerCaseTableName = tableName.toLowerCase();
+    TableSchema tableSchema = fileReader.getTableSchemaMap().get(lowerCaseTableName);
     if (tableSchema == null) {
       throw new NoTableException(tableName);
     }
     List<TSDataType> dataTypeList = new ArrayList<>(columnNames.size());
+    List<String> lowerCaseColumnNames = new ArrayList<>(columnNames.size());
     for (String columnName : columnNames) {
       Map<String, Integer> column2IndexMap = tableSchema.buildColumnPosIndex();
-      Integer columnIndex = column2IndexMap.get(columnName);
+      Integer columnIndex = column2IndexMap.get(columnName.toLowerCase());
       if (columnIndex == null) {
         throw new NoMeasurementException(columnName);
       }
+      lowerCaseColumnNames.add(columnName.toLowerCase());
       dataTypeList.add(tableSchema.getColumnSchemas().get(columnIndex).getType());
     }
     TsBlockReader tsBlockReader =
         queryExecutor.query(
-            tableName,
-            columnNames,
+            lowerCaseTableName,
+            lowerCaseColumnNames,
             new ExpressionTree.TimeBetweenAnd(startTime, endTime),
             null,
             null);

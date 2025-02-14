@@ -19,7 +19,7 @@
 
 package org.apache.tsfile.file.metadata;
 
-import org.apache.tsfile.common.TsFileApi;
+import org.apache.tsfile.annotations.TsFileApi;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.write.record.Tablet.ColumnCategory;
 
@@ -27,7 +27,7 @@ public class ColumnSchemaBuilder {
 
   private String columnName;
   private TSDataType columnDataType;
-  private ColumnCategory columnCategory = ColumnCategory.MEASUREMENT;
+  private ColumnCategory columnCategory = ColumnCategory.FIELD;
 
   @TsFileApi
   public ColumnSchema build() {
@@ -37,10 +37,10 @@ public class ColumnSchemaBuilder {
 
   @TsFileApi
   public ColumnSchemaBuilder name(String columnName) {
-    this.columnName = columnName == null ? null : columnName.trim();
-    if (this.columnName == null || this.columnName.isEmpty()) {
+    if (columnName == null || columnName.isEmpty()) {
       throw new IllegalArgumentException("Column name must be a non empty string");
     }
+    this.columnName = columnName;
     return this;
   }
 

@@ -76,7 +76,7 @@ public class TableQueryExecutor {
       throws ReadProcessException {
     TsFileMetadata fileMetadata = metadataQuerier.getWholeFileMetadata();
     MetadataIndexNode tableRoot = fileMetadata.getTableMetadataIndexNode(tableName);
-    TableSchema tableSchema = fileMetadata.getTableSchemaMap().get(tableName);
+    TableSchema tableSchema = metadataQuerier.getTableSchemaMap().get(tableName);
     if (tableRoot == null || tableSchema == null) {
       return new EmptyTsBlockReader();
     }
@@ -124,7 +124,7 @@ public class TableQueryExecutor {
 
       final ColumnCategory columnCategory = schema.getColumnTypes().get(columnIndex);
       columnPosMap.computeIfAbsent(columnName, k -> new ArrayList<>()).add(i);
-      if (columnCategory.equals(ColumnCategory.ID)) {
+      if (columnCategory.equals(ColumnCategory.TAG)) {
         idColumns.add(columnName);
       } else {
         measurementColumns.add(columnName);

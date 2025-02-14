@@ -19,7 +19,7 @@
 
 package org.apache.tsfile.write.v4;
 
-import org.apache.tsfile.common.TsFileApi;
+import org.apache.tsfile.annotations.TsFileApi;
 import org.apache.tsfile.exception.write.ConflictDataTypeException;
 import org.apache.tsfile.exception.write.NoMeasurementException;
 import org.apache.tsfile.exception.write.NoTableException;
@@ -66,7 +66,7 @@ public class DeviceTableModelWriter extends AbstractTableModelTsFileWriter {
     for (Pair<IDeviceID, Integer> pair : deviceIdEndIndexPairs) {
       // get corresponding ChunkGroupWriter and write this Tablet
       recordCount +=
-          tryToInitialGroupWriter(pair.left, isTableWriteAligned)
+          tryToInitialGroupWriter(pair.left, isTableWriteAligned, true)
               .write(table, startIndex, pair.right);
       startIndex = pair.right;
     }

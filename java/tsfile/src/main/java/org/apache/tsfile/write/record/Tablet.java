@@ -19,7 +19,9 @@
 
 package org.apache.tsfile.write.record;
 
-import org.apache.tsfile.common.TsFileApi;
+import org.apache.tsfile.annotations.TableModel;
+import org.apache.tsfile.annotations.TreeModel;
+import org.apache.tsfile.annotations.TsFileApi;
 import org.apache.tsfile.common.conf.TSFileConfig;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.file.metadata.IDeviceID;
@@ -78,14 +80,11 @@ public class Tablet {
   /** MeasurementId->indexOf({@link MeasurementSchema}) */
   private final Map<String, Integer> measurementIndex;
 
-  /** Timestamps in this {@link Tablet} */
-  public long[] timestamps;
+  private long[] timestamps;
 
-  /** Each object is a primitive type array, which represents values of one measurement */
-  public Object[] values;
+  private Object[] values;
 
-  /** Each {@link BitMap} represents the existence of each value in the current column. */
-  public BitMap[] bitMaps;
+  private BitMap[] bitMaps;
 
   /**
    * For compatibility with the usage of directly modifying Tablet content through public fields.
@@ -105,14 +104,16 @@ public class Tablet {
    * @param schemas the list of {@link MeasurementSchema}s for creating the tablet, only
    *     measurementId and type take effects
    */
+  @TreeModel
   public Tablet(String deviceId, List<IMeasurementSchema> schemas) {
     this(deviceId, schemas, DEFAULT_SIZE);
   }
 
+  @TreeModel
   public Tablet(String deviceId, List<IMeasurementSchema> schemas, int maxRowNumber) {
     this.insertTargetName = deviceId;
     this.schemas = new ArrayList<>(schemas);
-    setColumnCategories(ColumnCategory.nCopy(ColumnCategory.MEASUREMENT, schemas.size()));
+    setColumnCategories(ColumnCategory.nCopy(ColumnCategory.FIELD, schemas.size()));
     this.maxRowNumber = maxRowNumber;
     measurementIndex = new HashMap<>();
     constructMeasurementIndexMap();
@@ -122,10 +123,12 @@ public class Tablet {
     reset();
   }
 
+  @TreeModel
   public Tablet(IDeviceID deviceID, List<String> measurementList, List<TSDataType> dataTypeList) {
     this(deviceID, measurementList, dataTypeList, DEFAULT_SIZE);
   }
 
+  @TreeModel
   public Tablet(
       IDeviceID deviceID,
       List<String> measurementList,
@@ -135,11 +138,13 @@ public class Tablet {
         deviceID.toString(),
         measurementList,
         dataTypeList,
-        ColumnCategory.nCopy(ColumnCategory.MEASUREMENT, measurementList.size()),
-        maxRowNumber);
+        ColumnCategory.nCopy(ColumnCategory.FIELD, measurementList.size()),
+        maxRowNumber,
+        true);
   }
 
   @TsFileApi
+  @TableModel
   public Tablet(List<String> columnNameList, List<TSDataType> dataTypeList) {
     this(columnNameList, dataTypeList, DEFAULT_SIZE);
   }
@@ -153,25 +158,28 @@ public class Tablet {
    * @param maxRowNum the maximum number of rows for this tablet
    */
   @TsFileApi
+  @TableModel
   public Tablet(List<String> columnNameList, List<TSDataType> dataTypeList, int maxRowNum) {
     this(null, columnNameList, dataTypeList, null, maxRowNum, false);
   }
 
+  @TableModel
   public Tablet(
       String tableName,
-      List<String> measurementList,
+      List<String> columnNameList,
       List<TSDataType> dataTypeList,
       List<ColumnCategory> columnCategoryList) {
-    this(tableName, measurementList, dataTypeList, columnCategoryList, DEFAULT_SIZE);
+    this(tableName, columnNameList, dataTypeList, columnCategoryList, DEFAULT_SIZE);
   }
 
+  @TableModel
   public Tablet(
-      String insertTargetName,
-      List<String> measurementList,
+      String tableName,
+      List<String> columnNameList,
       List<TSDataType> dataTypeList,
       List<ColumnCategory> columnCategoryList,
       int maxRowNum) {
-    this(insertTargetName, measurementList, dataTypeList, columnCategoryList, maxRowNum, true);
+    this(tableName, columnNameList, dataTypeList, columnCategoryList, maxRowNum, true);
   }
 
   protected Tablet(
@@ -210,6 +218,7 @@ public class Tablet {
    * @param bitMaps given {@link BitMap}s
    * @param maxRowNumber the maximum number of rows for this {@link Tablet}
    */
+  @TreeModel
   public Tablet(
       String deviceId,
       List<IMeasurementSchema> schemas,
@@ -217,25 +226,29 @@ public class Tablet {
       Object[] values,
       BitMap[] bitMaps,
       int maxRowNumber) {
-    this(
-        deviceId,
-        schemas,
-        ColumnCategory.nCopy(ColumnCategory.MEASUREMENT, schemas.size()),
-        timestamps,
-        values,
-        bitMaps,
-        maxRowNumber);
+    this.insertTargetName = deviceId;
+    this.schemas = schemas;
+    setColumnCategories(ColumnCategory.nCopy(ColumnCategory.FIELD, schemas.size()));
+    this.timestamps = timestamps;
+    this.values = values;
+    this.bitMaps = bitMaps;
+    this.maxRowNumber = maxRowNumber;
+    // rowSize == maxRowNumber in this case
+    this.rowSize = maxRowNumber;
+    measurementIndex = new HashMap<>();
+    constructMeasurementIndexMap();
   }
 
+  @TableModel
   public Tablet(
-      String insertTargetName,
+      String tableName,
       List<IMeasurementSchema> schemas,
       List<ColumnCategory> columnCategories,
       long[] timestamps,
       Object[] values,
       BitMap[] bitMaps,
       int maxRowNumber) {
-    this.insertTargetName = insertTargetName;
+    this.insertTargetName = tableName;
     this.schemas = schemas;
     setColumnCategories(columnCategories);
     this.timestamps = timestamps;
@@ -276,10 +289,11 @@ public class Tablet {
   public void addTimestamp(int rowIndex, long timestamp) {
     timestamps[rowIndex] = timestamp;
     this.rowSize = Math.max(this.rowSize, rowIndex + 1);
+    initBitMapsWithApiUsage();
   }
 
   public void addValue(final String measurementId, final int rowIndex, final Object value) {
-    int indexOfSchema = measurementIndex.get(measurementId);
+    int indexOfSchema = getColumnIndexByMeasurement(measurementId);
     IMeasurementSchema measurementSchema = schemas.get(indexOfSchema);
     addValueOfDataType(measurementSchema.getType(), rowIndex, indexOfSchema, value);
   }
@@ -294,6 +308,12 @@ public class Tablet {
       case STRING:
       case BLOB:
         {
+          if (value != null && !(value instanceof Binary) && !(value instanceof String)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type Binary for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final Binary[] sensor = (Binary[]) values[indexOfSchema];
           if (value instanceof Binary) {
             sensor[rowIndex] = (Binary) value;
@@ -307,18 +327,36 @@ public class Tablet {
         }
       case FLOAT:
         {
+          if (value != null && !(value instanceof Float)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type Float for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final float[] sensor = (float[]) values[indexOfSchema];
           sensor[rowIndex] = value != null ? (float) value : Float.MIN_VALUE;
           break;
         }
       case INT32:
         {
+          if (value != null && !(value instanceof Integer)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type Integer for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final int[] sensor = (int[]) values[indexOfSchema];
           sensor[rowIndex] = value != null ? (int) value : Integer.MIN_VALUE;
           break;
         }
       case DATE:
         {
+          if (value != null && !(value instanceof LocalDate)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type LocalDate for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final LocalDate[] sensor = (LocalDate[]) values[indexOfSchema];
           sensor[rowIndex] = value != null ? (LocalDate) value : EMPTY_DATE;
           break;
@@ -326,18 +364,36 @@ public class Tablet {
       case INT64:
       case TIMESTAMP:
         {
+          if (value != null && !(value instanceof Long)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type Long for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final long[] sensor = (long[]) values[indexOfSchema];
           sensor[rowIndex] = value != null ? (long) value : Long.MIN_VALUE;
           break;
         }
       case DOUBLE:
         {
+          if (value != null && !(value instanceof Double)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type Double for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final double[] sensor = (double[]) values[indexOfSchema];
           sensor[rowIndex] = value != null ? (double) value : Double.MIN_VALUE;
           break;
         }
       case BOOLEAN:
         {
+          if (value != null && !(value instanceof Boolean)) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Expected value of type Boolean for data type %s, but got %s",
+                    dataType, value.getClass().getName()));
+          }
           final boolean[] sensor = (boolean[]) values[indexOfSchema];
           sensor[rowIndex] = value != null && (boolean) value;
           break;
@@ -349,12 +405,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, int val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, int val) {
+    if (!(values[columnIndex] instanceof int[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not INT32");
+    }
     final int[] sensor = (int[]) values[columnIndex];
     sensor[rowIndex] = val;
     updateBitMap(rowIndex, columnIndex, false);
@@ -362,12 +422,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, long val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, long val) {
+    if (!(values[columnIndex] instanceof long[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not INT64/TIMESTAMP");
+    }
     final long[] sensor = (long[]) values[columnIndex];
     sensor[rowIndex] = val;
     updateBitMap(rowIndex, columnIndex, false);
@@ -375,12 +439,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, float val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, float val) {
+    if (!(values[columnIndex] instanceof float[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not FLOAT");
+    }
     final float[] sensor = (float[]) values[columnIndex];
     sensor[rowIndex] = val;
     updateBitMap(rowIndex, columnIndex, false);
@@ -388,12 +456,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, double val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, double val) {
+    if (!(values[columnIndex] instanceof double[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not DOUBLE");
+    }
     final double[] sensor = (double[]) values[columnIndex];
     sensor[rowIndex] = val;
     updateBitMap(rowIndex, columnIndex, false);
@@ -401,12 +473,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, boolean val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, boolean val) {
+    if (!(values[columnIndex] instanceof boolean[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not BOOLEAN");
+    }
     final boolean[] sensor = (boolean[]) values[columnIndex];
     sensor[rowIndex] = val;
     updateBitMap(rowIndex, columnIndex, false);
@@ -414,12 +490,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, String val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, String val) {
+    if (!(values[columnIndex] instanceof Binary[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not TEXT/STRING/BLOB");
+    }
     final Binary[] sensor = (Binary[]) values[columnIndex];
     sensor[rowIndex] = new Binary(val, TSFileConfig.STRING_CHARSET);
     updateBitMap(rowIndex, columnIndex, false);
@@ -427,12 +507,16 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, byte[] val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, byte[] val) {
+    if (!(values[columnIndex] instanceof Binary[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not TEXT/STRING/BLOB");
+    }
     final Binary[] sensor = (Binary[]) values[columnIndex];
     sensor[rowIndex] = new Binary(val);
     updateBitMap(rowIndex, columnIndex, false);
@@ -440,18 +524,42 @@ public class Tablet {
 
   @TsFileApi
   public void addValue(int rowIndex, String measurement, LocalDate val) {
-    Integer columnIndex = measurementIndex.get(measurement);
+    int columnIndex = getColumnIndexByMeasurement(measurement);
     addValue(rowIndex, columnIndex, val);
   }
 
   @TsFileApi
   public void addValue(int rowIndex, int columnIndex, LocalDate val) {
+    if (!(values[columnIndex] instanceof LocalDate[])) {
+      throw new IllegalArgumentException(
+          "The data type of column index " + columnIndex + " is not DATE");
+    }
     final LocalDate[] sensor = (LocalDate[]) values[columnIndex];
     sensor[rowIndex] = val;
     updateBitMap(rowIndex, columnIndex, false);
   }
 
+  private int getColumnIndexByMeasurement(String measurement) {
+    if (measurement == null) {
+      throw new IllegalArgumentException("measurement should be non null value");
+    }
+    Integer columnIndex = measurementIndex.get(measurement);
+    if (columnIndex == null) {
+      throw new IllegalArgumentException("No measurement for " + measurement);
+    }
+    return columnIndex;
+  }
+
   private void updateBitMap(int rowIndex, int columnIndex, boolean mark) {
+    initBitMapsWithApiUsage();
+    if (mark) {
+      bitMaps[columnIndex].mark(rowIndex);
+    } else {
+      bitMaps[columnIndex].unmark(rowIndex);
+    }
+  }
+
+  private void initBitMapsWithApiUsage() {
     if (bitMaps == null) {
       initBitMaps();
     }
@@ -460,11 +568,6 @@ public class Tablet {
       for (BitMap bitMap : bitMaps) {
         bitMap.markAll();
       }
-    }
-    if (mark) {
-      bitMaps[columnIndex].mark(rowIndex);
-    } else {
-      bitMaps[columnIndex].unmark(rowIndex);
     }
   }
 
@@ -636,7 +739,11 @@ public class Tablet {
         case DATE:
           LocalDate[] dateValues = (LocalDate[]) column;
           for (int j = 0; j < rowSize; j++) {
-            ReadWriteIOUtils.write(DateUtils.parseDateExpressionToInt(dateValues[j]), stream);
+            ReadWriteIOUtils.write(
+                dateValues[j] == null
+                    ? DateUtils.EMPTY_DATE_INT
+                    : DateUtils.parseDateExpressionToInt(dateValues[j]),
+                stream);
           }
           break;
         case INT64:
@@ -1091,9 +1198,10 @@ public class Tablet {
    * @param i a row number.
    * @return the IDeviceID of the i-th row.
    */
+  @TableModel
   public IDeviceID getDeviceID(int i) {
     String[] idArray = new String[idColumnIndexes.size() + 1];
-    idArray[0] = insertTargetName;
+    idArray[0] = getTableName();
     for (int j = 0; j < idColumnIndexes.size(); j++) {
       final Object value = getValue(i, idColumnIndexes.get(j));
       idArray[j + 1] = value != null ? value.toString() : null;
@@ -1106,7 +1214,7 @@ public class Tablet {
     idColumnIndexes.clear();
     for (int i = 0; i < columnCategories.size(); i++) {
       ColumnCategory columnCategory = columnCategories.get(i);
-      if (columnCategory.equals(ColumnCategory.ID)) {
+      if (columnCategory.equals(ColumnCategory.TAG)) {
         idColumnIndexes.add(i);
       }
     }
@@ -1121,9 +1229,37 @@ public class Tablet {
     this.rowSize = rowSize;
   }
 
+  public long getTimestamp(int i) {
+    return timestamps[i];
+  }
+
+  public long[] getTimestamps() {
+    return timestamps;
+  }
+
+  public void setTimestamps(long[] timestamps) {
+    this.timestamps = timestamps;
+  }
+
+  public Object[] getValues() {
+    return values;
+  }
+
+  public void setValues(Object[] values) {
+    this.values = values;
+  }
+
+  public BitMap[] getBitMaps() {
+    return bitMaps;
+  }
+
+  public void setBitMaps(BitMap[] bitMaps) {
+    this.bitMaps = bitMaps;
+  }
+
   public enum ColumnCategory {
-    ID,
-    MEASUREMENT,
+    TAG,
+    FIELD,
     ATTRIBUTE;
 
     public static List<ColumnCategory> nCopy(ColumnCategory type, int n) {
@@ -1140,6 +1276,7 @@ public class Tablet {
    *
    * @return the insertTargetName as the deviceId
    */
+  @TreeModel
   public String getDeviceId() {
     return insertTargetName;
   }
@@ -1149,12 +1286,14 @@ public class Tablet {
    *
    * @param deviceId set the deviceId as the insertTargetName
    */
+  @TreeModel
   public void setDeviceId(String deviceId) {
     this.insertTargetName = deviceId;
   }
 
+  @TableModel
   public String getTableName() {
-    return insertTargetName;
+    return insertTargetName == null ? null : insertTargetName.toLowerCase();
   }
 
   /**
@@ -1162,11 +1301,21 @@ public class Tablet {
    *
    * @param tableName set the tableName as the insertTargetName
    */
+  @TableModel
   public void setTableName(String tableName) {
-    this.insertTargetName = tableName;
+    this.insertTargetName = tableName.toLowerCase();
   }
 
   public List<ColumnCategory> getColumnTypes() {
     return columnCategories;
+  }
+
+  public boolean isSorted() {
+    for (int i = 1; i < rowSize; i++) {
+      if (timestamps[i] < timestamps[i - 1]) {
+        return false;
+      }
+    }
+    return true;
   }
 }

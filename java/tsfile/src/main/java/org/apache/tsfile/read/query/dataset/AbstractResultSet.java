@@ -19,7 +19,7 @@
 
 package org.apache.tsfile.read.query.dataset;
 
-import org.apache.tsfile.common.TsFileApi;
+import org.apache.tsfile.annotations.TsFileApi;
 import org.apache.tsfile.enums.TSDataType;
 import org.apache.tsfile.exception.NullFieldException;
 import org.apache.tsfile.read.common.Field;
@@ -168,7 +168,7 @@ public abstract class AbstractResultSet implements ResultSet {
   }
 
   protected Field getField(int columnIndex) {
-    if (columnIndex > this.columnNameToColumnIndexMap.size()) {
+    if (columnIndex > this.columnNameToColumnIndexMap.size() || columnIndex <= 0) {
       throw new IndexOutOfBoundsException("column index " + columnIndex + " out of bound");
     }
     Field field;

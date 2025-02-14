@@ -274,23 +274,21 @@ public class PerformanceTest {
   private void fillTreeTablet(Tablet tablet, int tableNum, int deviceNum, int tabletNum) {
     tablet.setDeviceId(genTreeDeviceId(tableNum, deviceNum).toString());
     for (int i = 0; i < measurementSchemaCnt; i++) {
-      long[] values = (long[]) tablet.values[i];
       for (int valNum = 0; valNum < pointPerSeries; valNum++) {
-        values[valNum] = (long) tabletNum * pointPerSeries + valNum;
+        tablet.addValue(valNum, i, tabletNum * pointPerSeries + valNum);
       }
     }
     for (int valNum = 0; valNum < pointPerSeries; valNum++) {
-      tablet.timestamps[valNum] = (long) tabletNum * pointPerSeries + valNum;
+      tablet.addTimestamp(valNum, tabletNum * pointPerSeries + valNum);
     }
-    tablet.setRowSize(pointPerSeries);
   }
 
   private Tablet initTableTablet() {
     List<IMeasurementSchema> allSchema = new ArrayList<>(idSchemas);
     List<ColumnCategory> columnCategories =
-        ColumnCategory.nCopy(ColumnCategory.ID, idSchemas.size());
+        ColumnCategory.nCopy(ColumnCategory.TAG, idSchemas.size());
     allSchema.addAll(measurementSchemas);
-    columnCategories.addAll(ColumnCategory.nCopy(ColumnCategory.MEASUREMENT, measurementSchemaCnt));
+    columnCategories.addAll(ColumnCategory.nCopy(ColumnCategory.FIELD, measurementSchemaCnt));
     return new Tablet(
         null,
         IMeasurementSchema.getMeasurementNameList(measurementSchemas),
@@ -303,21 +301,18 @@ public class PerformanceTest {
     IDeviceID deviceID = genTableDeviceId(tableNum, deviceNum);
     tablet.setTableName(deviceID.segment(0).toString());
     for (int i = 0; i < idSchemaCnt; i++) {
-      String[] strings = ((String[]) tablet.values[i]);
       for (int rowNum = 0; rowNum < pointPerSeries; rowNum++) {
-        strings[rowNum] = deviceID.segment(i + 1).toString();
+        tablet.addValue(rowNum, i, deviceID.segment(i + 1).toString());
       }
     }
     for (int i = 0; i < measurementSchemaCnt; i++) {
-      long[] values = (long[]) tablet.values[i + idSchemaCnt];
       for (int valNum = 0; valNum < pointPerSeries; valNum++) {
-        values[valNum] = (long) tabletNum * pointPerSeries + valNum;
+        tablet.addValue(valNum, i + idSchemaCnt, tabletNum * pointPerSeries + valNum);
       }
     }
     for (int valNum = 0; valNum < pointPerSeries; valNum++) {
-      tablet.timestamps[valNum] = (long) tabletNum * pointPerSeries + valNum;
+      tablet.addTimestamp(valNum, tabletNum * pointPerSeries + valNum);
     }
-    tablet.setRowSize(pointPerSeries);
   }
 
   private void registerTree(TsFileWriter writer) throws WriteProcessException {
@@ -367,11 +362,11 @@ public class PerformanceTest {
 
     for (int i = 0; i < idSchemaCnt; i++) {
       measurementSchemas.add(genIdSchema(i));
-      columnCategories.add(ColumnCategory.ID);
+      columnCategories.add(ColumnCategory.TAG);
     }
     for (int i = 0; i < measurementSchemaCnt; i++) {
       measurementSchemas.add(genMeasurementSchema(i));
-      columnCategories.add(ColumnCategory.MEASUREMENT);
+      columnCategories.add(ColumnCategory.FIELD);
     }
     return new TableSchema(genTableName(tableNum), measurementSchemas, columnCategories);
   }

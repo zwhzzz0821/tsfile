@@ -20,11 +20,12 @@ cmake_minimum_required(VERSION 3.11)
 project(TsFile_CPP)
 
 cmake_policy(SET CMP0079 NEW)
-set(TsFile_CPP_VERSION 1.2.0.dev)
-
-set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} -Wall -Werror")
+set(TsFile_CPP_VERSION 2.1.0.dev)
+set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} -Wall")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=maybe-uninitialized")
+endif()
 message("cmake using: USE_CPP11=${USE_CPP11}")
-
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
@@ -71,10 +72,14 @@ set(PROJECT_INCLUDE_DIR ${PROJECT_INCLUDE_DIR}
                         ${PROJECT_SOURCE_DIR}/src
                         ${PROJECT_SOURCE_DIR}/third_party/lz4
                         ${PROJECT_SOURCE_DIR}/third_party/lzokay
+                        ${PROJECT_SOURCE_DIR}/third_party/zlib-1.2.13
+                        ${PROJECT_BINARY_DIR}/third_party/zlib-1.2.13
 )
 
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 include_directories(${PROJECT_INCLUDE_DIR})
+
+include_directories(${PROJECT_SOURCE_DIR}/third_party/antlr4-cpp-runtime-4/runtime/src)
 
 add_subdirectory(third_party)
 

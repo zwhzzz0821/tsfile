@@ -23,7 +23,9 @@
 #include <string>
 #include <vector>
 
+#include "common/allocator/my_string.h"
 #include "common/db_common.h"
+#include "utils/errno_define.h"
 
 namespace storage {
 
@@ -51,6 +53,7 @@ struct DataPoint {
         int64_t i64_val_;
         float float_val_;
         double double_val_;
+        common::String *str_val_;
     } u_;
     TextType text_val_;
 
@@ -89,6 +92,16 @@ struct DataPoint {
         u_.double_val_ = d;
     }
 
+    DataPoint(const std::string &measurement_name, common::String &str,
+              common::PageArena &pa)
+        : measurement_name_(measurement_name),
+          data_type_(common::STRING),
+          text_val_() {
+        char *p_buf = (char *)pa.alloc(sizeof(common::String));
+        u_.str_val_ = new (p_buf) common::String();
+        u_.str_val_->dup_from(str, pa);
+    }
+
     // DataPoint(const std::string &measurement_name, Text &text),
     //   : measurement_name_(measurement_name),
     //     data_type_(common::TEXT),
@@ -120,24 +133,37 @@ struct DataPoint {
 
 struct TsRecord {
     int64_t timestamp_;
-    std::string device_name_;
+    std::string device_id_;
     std::vector<DataPoint> points_;
+    common::PageArena pa;
 
-    TsRecord(const std::string &device_name) : device_name_(device_name) {}
+    TsRecord(const std::string &device_name) : device_id_(device_name) {
+        pa.init(512, common::MOD_TSFILE_READER);
+    }
 
     TsRecord(int64_t timestamp, const std::string &device_name,
              int32_t point_count_in_row = 0)
-        : timestamp_(timestamp), device_name_(device_name), points_() {
+        : timestamp_(timestamp), device_id_(device_name), points_() {
         if (point_count_in_row > 0) {
             points_.reserve(point_count_in_row);
         }
     }
 
-    void append_data_point(const DataPoint &point) {
-        // points_.emplace_back(point); C++11
-        points_.push_back(point);
+    template <typename T>
+    int add_point(const std::string &measurement_name, T val) {
+        int ret = common::E_OK;
+        points_.emplace_back(DataPoint(measurement_name, val));
+        return ret;
     }
+
 };
+
+template<>
+inline int TsRecord::add_point(const std::string &measurement_name, common::String val) {
+    int ret = common::E_OK;
+    points_.emplace_back(DataPoint(measurement_name, val, pa));
+    return ret;
+}
 
 }  // end namespace storage
 #endif  // COMMON_RECORD_H

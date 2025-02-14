@@ -20,7 +20,7 @@
 package org.apache.tsfile.read.reader.block;
 
 import org.apache.tsfile.block.column.Column;
-import org.apache.tsfile.file.metadata.AlignedChunkMetadata;
+import org.apache.tsfile.file.metadata.AbstractAlignedChunkMetadata;
 import org.apache.tsfile.file.metadata.IChunkMetadata;
 import org.apache.tsfile.read.common.BatchData;
 import org.apache.tsfile.read.common.block.TsBlock;
@@ -59,7 +59,7 @@ public class SingleDeviceTsBlockReader implements TsBlockReader {
   private final Map<String, MeasurementColumnContext> measureColumnContextMap;
   private final Map<String, IdColumnContext> idColumnContextMap;
 
-  private long nextTime;
+  private Long nextTime;
 
   public SingleDeviceTsBlockReader(
       DeviceQueryTask task,
@@ -107,7 +107,7 @@ public class SingleDeviceTsBlockReader implements TsBlockReader {
     AbstractFileSeriesReader seriesReader =
         new FileSeriesReader(chunkLoader, chunkMetadataList, timeFilter, false);
     if (seriesReader.hasNextBatch()) {
-      if (chunkMetadata instanceof AlignedChunkMetadata) {
+      if (chunkMetadata instanceof AbstractAlignedChunkMetadata) {
         final List<String> currentChunkMeasurementNames =
             seriesReader.getCurrentChunkMeasurementNames();
         List<List<Integer>> posInResult = new ArrayList<>();
@@ -142,7 +142,7 @@ public class SingleDeviceTsBlockReader implements TsBlockReader {
     }
 
     currentBlock.reset();
-    nextTime = Long.MAX_VALUE;
+    nextTime = null;
     List<MeasurementColumnContext> minTimeColumns = new ArrayList<>();
 
     while (currentBlock.getPositionCount() < blockSize) {
@@ -150,7 +150,7 @@ public class SingleDeviceTsBlockReader implements TsBlockReader {
       for (Entry<String, MeasurementColumnContext> entry : measureColumnContextMap.entrySet()) {
         final BatchData batchData = entry.getValue().currentBatch;
         final long currentTime = batchData.currentTime();
-        if (nextTime > currentTime) {
+        if (nextTime == null || nextTime > currentTime) {
           nextTime = currentTime;
           minTimeColumns.clear();
           minTimeColumns.add(entry.getValue());
@@ -161,7 +161,7 @@ public class SingleDeviceTsBlockReader implements TsBlockReader {
 
       try {
         fillMeasurements(minTimeColumns);
-        nextTime = Long.MAX_VALUE;
+        nextTime = null;
       } catch (IOException e) {
         LOGGER.error("Cannot fill measurements", e);
         return false;
@@ -369,27 +369,31 @@ public class SingleDeviceTsBlockReader implements TsBlockReader {
         final TsPrimitiveType value = vector[i];
         final List<Integer> columnPositions = posInResult.get(i);
         for (Integer pos : columnPositions) {
-          switch (value.getDataType()) {
-            case TEXT:
-              block.getColumn(pos).getBinaries()[blockRowNum] = value.getBinary();
-              break;
-            case INT32:
-              block.getColumn(pos).getInts()[blockRowNum] = value.getInt();
-              break;
-            case INT64:
-              block.getColumn(pos).getLongs()[blockRowNum] = value.getLong();
-              break;
-            case BOOLEAN:
-              block.getColumn(pos).getBooleans()[blockRowNum] = value.getBoolean();
-              break;
-            case FLOAT:
-              block.getColumn(pos).getFloats()[blockRowNum] = value.getFloat();
-              break;
-            case DOUBLE:
-              block.getColumn(pos).getDoubles()[blockRowNum] = value.getDouble();
-              break;
-            default:
-              throw new IllegalArgumentException("Unsupported data type: " + value.getDataType());
+          if (value != null) {
+            switch (value.getDataType()) {
+              case TEXT:
+                block.getColumn(pos).getBinaries()[blockRowNum] = value.getBinary();
+                break;
+              case INT32:
+                block.getColumn(pos).getInts()[blockRowNum] = value.getInt();
+                break;
+              case INT64:
+                block.getColumn(pos).getLongs()[blockRowNum] = value.getLong();
+                break;
+              case BOOLEAN:
+                block.getColumn(pos).getBooleans()[blockRowNum] = value.getBoolean();
+                break;
+              case FLOAT:
+                block.getColumn(pos).getFloats()[blockRowNum] = value.getFloat();
+                break;
+              case DOUBLE:
+                block.getColumn(pos).getDoubles()[blockRowNum] = value.getDouble();
+                break;
+              default:
+                throw new IllegalArgumentException("Unsupported data type: " + value.getDataType());
+            }
+          } else {
+            block.getColumn(pos).setNull(blockRowNum, blockRowNum + 1);
           }
           block.getColumn(pos).setPositionCount(blockRowNum + 1);
         }

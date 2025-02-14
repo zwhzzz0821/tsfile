@@ -15,7 +15,7 @@ on:
 
 jobs:
   codecov:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == 'apache/tsfile' || github.event_name == 'push'
 
     steps:
@@ -36,7 +36,7 @@ jobs:
           rm -rf cpp/target/build/test/CMakeFiles/TsFile_Test.dir
           rm -rf cpp/target/build/test/coverage.info
       - name: Upload coverage reports to codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: java/tsfile/target/jacoco-merged-reports/jacoco.xml,cpp/target/build/test/coverage_report/index.html
